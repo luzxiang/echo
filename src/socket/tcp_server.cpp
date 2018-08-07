@@ -6,11 +6,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
+#include <stdlib.h>
 
 #include "../log/log.h"
 void *create_tcpserver_thread(void*p)
 {
-
     return NULL;
 }
 
@@ -23,8 +23,8 @@ int tcp_server(int port)
     struct sockaddr_in my_addr;   //服务器网络地址结构体
     struct sockaddr_in remote_addr; //客户端网络地址结构体
     unsigned int sin_size;
-    char recvbuf[BUFSIZ] = {0};  //数据传送的缓冲区
-    char sendbuf[BUFSIZ] = {0};  //数据传送的缓冲区
+    char *recvbuf = (char*)malloc(BUFSIZ);  //数据传送的缓冲区
+    char *sendbuf = (char*)malloc(BUFSIZ);  //数据传送的缓冲区
 
     memset(&my_addr,0,sizeof(my_addr)); //数据初始化--清零
     my_addr.sin_family = AF_INET; //设置为IP通信
@@ -49,7 +49,6 @@ int tcp_server(int port)
 
     /*监听连接请求--监听队列长度为5*/
     listen(server_sockfd,5);
-
     sin_size = sizeof(struct sockaddr_in);
     /*等待客户端连接请求到达*/
     LOG_INFO("waiting client connect ...");

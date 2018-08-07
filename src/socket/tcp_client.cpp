@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 
 #include "../log/log.h"
@@ -91,6 +92,33 @@ int socket_recv(int fd, char *pdata, int len)
 	return offset;
 }
 
+/*******************************************************************************
+ * Function     : set_socket
+ * Description  : TODO
+ * Input        :
+ * Return       :
+ * Author       : luzx
+ * Notes        : --
+ *******************************************************************************/
+static int set_socketopt(int fd)
+{
+	int b_on = 0;
+    ioctl(fd, FIONBIO, &b_on);
+	//Linux环境下，须如下定义：
+	struct timeval timeout = {3,0};
+	//设置发送超时
+	setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,(char *)&timeout,sizeof(struct timeval));
+	//设置接收超时
+	setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,(char *)&timeout,sizeof(struct timeval));
+	//set recv buf size
+	int recv_buf_size = 1*1024*1024;
+	setsockopt(fd,SOL_SOCKET,SO_RCVBUF,(char *)&recv_buf_size,sizeof(recv_buf_size));
+	//set send buf size
+	int send_buf_size = 1*1024*1024;
+	setsockopt(fd,SOL_SOCKET,SO_SNDBUF,(char *)&send_buf_size,sizeof(send_buf_size));
+
+	return 0;
+}
 int tcp_client(char *ip,int port)
 {
     int client_sockfd;
@@ -105,11 +133,12 @@ int tcp_client(char *ip,int port)
 
     LOG_INFO("client working...");
     /*创建客户端套接字--IPv4协议，面向连接通信，TCP协议*/
-    if((client_sockfd=socket(PF_INET,SOCK_STREAM,0))<0)
+    if((client_sockfd = socket(PF_INET,SOCK_STREAM,0)) < 0)
     {
         perror("socket");
         return -1;
     }
+    set_socketopt(client_sockfd);
 
     /*将套接字绑定到服务器的网络地址上*/
     if(connect(client_sockfd,(struct sockaddr *)&remote_addr,sizeof(struct sockaddr))<0)
@@ -118,7 +147,7 @@ int tcp_client(char *ip,int port)
         return -1;
     }
     LOG_INFO("connected to server");
-    len=socket_recv(client_sockfd,recvbuf,sizeof(recvbuf));//接收服务器端信息
+    len = socket_recv(client_sockfd,recvbuf,sizeof(recvbuf));//接收服务器端信息
     recvbuf[len]='\0';
     LOG_INFO("%s\n",recvbuf); //打印服务器端信息
     /*循环的发送接收信息并打印接收信息--recv返回接收到的字节数，send返回发送的字节数*/

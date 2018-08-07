@@ -29,12 +29,11 @@ void tcpip_test(char mode = 's')
 {
     char ip[] = "127.0.0.1";//"66.154.108.47";//
     int port = 4141;
-    LOG_INFO("server(0) or client(1)>>");
 
     if(mode == 's')   //1:Client
     {
 //        tcp_server(port);
-        socket_server(port);
+        socket_create_server(port);
     }
     else if(mode == 'c')//2.Server
     {

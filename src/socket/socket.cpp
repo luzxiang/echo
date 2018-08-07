@@ -13,37 +13,29 @@
 #include <error.h>
 #include <unistd.h>
 #include <time.h>
-#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <string>
+#include <deque>
+#include <map>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 
+#include <iostream>
+using namespace std;
 #define MAX_FD_NUM 3
 
-/*******************************************************
- * Function     : setnonblock
- * Description  : TODO
- * Input        :
- * Return       :
- * Author       : luzxiang
- * Notes        : --
- ******************************************************/
-void setnonblock(int fd)
-{
-	int flag = fcntl(fd,F_GETFL,0);
-	if(flag == -1)
-	{
-		printf("get fcntl error!!!\n");
-		return ;
-	}
-	int ret = fcntl(fd,F_SETFL,flag | O_NONBLOCK);
-	if(ret == -1)
-	{
-		printf("set fcntl error!!!\n");
-		return ;
-	}
-}
+struct ClientConnected{
+	int fd;
+	struct sockaddr_in addr;
+	std::deque <string> SendBuf;//all data wait to send
+	std::deque <string> RecvBuf;//all data have receive
+};//created
+
+std::map<int, ClientConnected> g_Clients;
+//ClientConnected g_Clients[MAX_FD_NUM];
+struct sockaddr_in g_sevrAddr;
 /*******************************************************************************
  * Function     : set_socket
  * Description  : TODO
@@ -52,15 +44,23 @@ void setnonblock(int fd)
  * Author       : luzx
  * Notes        : --
  *******************************************************************************/
-int set_socket(int fd)
+static int set_socketopt(int fd)
 {
-	setnonblock(fd);
+	int b_on = 0;
+    ioctl(fd, FIONBIO, &b_on);
 	//Linux环境下，须如下定义：
 	struct timeval timeout = {3,0};
 	//设置发送超时
 	setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,(char *)&timeout,sizeof(struct timeval));
 	//设置接收超时
 	setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,(char *)&timeout,sizeof(struct timeval));
+	//set recv buf size
+	int recv_buf_size = 1*1024*1024;
+	setsockopt(fd,SOL_SOCKET,SO_RCVBUF,(char *)&recv_buf_size,sizeof(recv_buf_size));
+	//set send buf size
+	int send_buf_size = 1*1024*1024;
+	setsockopt(fd,SOL_SOCKET,SO_SNDBUF,(char *)&send_buf_size,sizeof(send_buf_size));
+
 	return 0;
 }
 
@@ -81,24 +81,114 @@ int socket_create(int port)
 		return -1;
 	}
 
-	set_socket(fd);
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	memset(&g_sevrAddr, 0, sizeof(g_sevrAddr));
+	g_sevrAddr.sin_family = AF_INET;
+	g_sevrAddr.sin_port = htons(port);
+	g_sevrAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if(bind(fd, (struct sockaddr*)&addr,sizeof(addr)) == -1)
+	if(bind(fd, (struct sockaddr*)&g_sevrAddr,sizeof(g_sevrAddr)) == -1)
 	{
 		printf("bind error!!!");
 		return -1;
 	}
+
+	set_socketopt(fd);
+
 	if(listen(fd, 20) == -1)
 	{
 		printf("listen error!!!");
 		return -1;
 	}
 	return fd;
+}
+
+/*******************************************************************************
+ * Function     : socket_accept
+ * Description  : TODO
+ * Input        :
+ * Return       :
+ * Author       : luzx
+ * Notes        : --
+ *******************************************************************************/
+int socket_accept(int sfd)
+{
+	int cfd ;
+	unsigned int len = 0;
+	struct sockaddr_in cliAddr;
+
+	len = sizeof(cliAddr);
+	memset(&cliAddr, 0, len);
+	printf("accept client:\n");
+	cfd = accept(sfd, (struct sockaddr*)&cliAddr, &len);
+
+	if(cfd == -1)
+	{
+		printf("accept error!!!\n");
+		return -1;
+	}
+
+//	for(int i = 0; i < MAX_FD_NUM; ++i)
+//	for(auto c: g_Clients)
+	g_Clients[cfd].fd = cfd;
+	memcpy(&g_Clients[cfd].addr,&cliAddr,sizeof(g_Clients[cfd].addr));
+
+//	{
+//		c.second.fd = cfd;
+//		memcpy(&c.second.addr,&cliAddr,sizeof(c.second.addr));
+	printf("%s :%d\n",inet_ntoa(g_Clients[cfd].addr.sin_addr),g_Clients[cfd].addr.sin_port);
+//		break;
+//	}
+	return 0;
+}
+
+/*******************************************************************************
+ * Function     : select_send
+ * Description  : TODO
+ * Input        :
+ * Return       :
+ * Author       : luzx
+ * Notes        : --
+ *******************************************************************************/
+int select_send(int fd)
+{
+	int ret = 0;
+	int slen = 0;
+	int max_fd = fd;
+	unsigned int sumlen = 0;
+
+	fd_set wfds;
+
+	std::deque <string>::iterator msg = g_Clients[0].RecvBuf.begin();
+	for(;msg != g_Clients[0].RecvBuf.end();msg = g_Clients[0].RecvBuf.begin())
+	{
+		sumlen = 0;
+		while(sumlen < msg->length())
+		{
+			FD_ZERO(&wfds);
+			FD_SET(fd,&wfds);
+
+			ret = select(max_fd + 1,NULL,&wfds,NULL,NULL);
+			if(ret == -1)
+			{
+				printf("select error!!!");
+				return -1;
+			}
+			//
+			if(FD_ISSET(fd, &wfds))
+			{
+				slen = send(fd,msg->data(),msg->length(),0);
+				if(slen < 0)
+				{
+					perror("write");
+					return -1;
+				}
+				sumlen += slen;
+			}
+		}
+		g_Clients[0].RecvBuf.pop_front();
+	}
+//	g_RecvBuf.clear();
+	return 0;
 }
 
 /*******************************************************
@@ -109,80 +199,61 @@ int socket_create(int port)
  * Author       : luzxiang
  * Notes        : --
  ******************************************************/
-void socket_accept(int fd)
+void select_recv(int fd)
 {
 	int i =0;
+	int ret = 0;
 	int max_fd = fd;
 
-	int clients[MAX_FD_NUM] = {-1};
-	int client_fd ;
-	fd_set readfds;
-	unsigned int len = 0;
+	fd_set rfds;
 
 	while(1)
 	{
-		FD_ZERO(&readfds);
-		FD_SET(fd,&readfds);
+		FD_ZERO(&rfds);
+		FD_SET(fd,&rfds);
 
 		for(i = 0; i < MAX_FD_NUM; ++i)
 		{
-			if(clients[i] != -1)
+			if(g_Clients[i].fd != -1)
 			{
-				FD_SET(clients[i],&readfds);
+				FD_SET(g_Clients[i].fd,&rfds);
 			}
-			max_fd = (max_fd < clients[i])?(clients[i]):(max_fd);
+			max_fd = (max_fd < g_Clients[i].fd)?(g_Clients[i].fd):(max_fd);
 		}
-		int ret = select(max_fd + 1, &readfds, NULL,NULL,NULL);
+		ret = select(max_fd + 1, &rfds, NULL,NULL,NULL);
 //		printf("select = %d\n",ret);
 		if(ret == -1)
 		{
 			printf("select error!!!");
-			return;
+			break;
 		}
-		if(FD_ISSET(fd, &readfds))
+		if(FD_ISSET(fd, &rfds))
 		{
-			struct sockaddr_in client_addr;
-			memset(&client_addr, 0, sizeof(client_addr));
-			len = sizeof(client_addr);
-			printf("accept client:\n");
-			client_fd = accept(fd, (struct sockaddr*)&client_addr, &len);
-
-			if(client_fd == -1)
-			{
-				printf("accept error!!!");
-				break;
-			}
-			for(i = 0; i < MAX_FD_NUM; ++i)
-			{
-				if(clients[i] == -1)
-				{
-					clients[i] = client_fd;
-					printf("%s :%d\n",inet_ntoa(client_addr.sin_addr),client_addr.sin_port);
-					break;
-				}
-			}
+			socket_accept(fd);
 			continue;
 		}
 		//
-		for(i = 0; i < MAX_FD_NUM; ++i)
+		for(i = 0; ret && i < MAX_FD_NUM; ++i)
 		{
-			if(FD_ISSET(clients[i], &readfds))
+			if(!FD_ISSET(g_Clients[i].fd, &rfds))
+				continue;
+			--ret;
+			char recvbuf[1024] = {0};
+			if(0 == recv(g_Clients[i].fd, recvbuf, sizeof(recvbuf), 0))
 			{
-				char recvbuf[1024] = {0};
-				recv(clients[i], recvbuf, sizeof(recvbuf), 0);
-				printf("recv:%s\n",recvbuf);
-				char sendbuf[1024] = {'\0'};
-				sprintf(sendbuf,"[%s]",recvbuf);
-				if(send(clients[i],sendbuf,strlen(sendbuf),0)<0)
-				{
-					perror("write");
-					return ;
-				}
+				close(g_Clients[i].fd);
+				g_Clients[i].fd = -1;
+				printf("socket closed!!!\n");
+				continue;
 			}
+			g_Clients[0].RecvBuf.push_back(recvbuf);
+			printf("recv:%s\n",recvbuf);
+			select_send(g_Clients[i].fd);
 		}
 	}
 	close(fd);
 }
+
 
 /*******************************************************************************
  * Function     : server
@@ -192,7 +263,7 @@ void socket_accept(int fd)
  * Author       : luzx
  * Notes        : --
  *******************************************************************************/
-void socket_server(int port)
+void socket_create_server(int port)
 {
 	int fd = socket_create(port);
 	if(fd == -1)
@@ -200,7 +271,7 @@ void socket_server(int port)
 		printf("socket_create error!!!");
 		return ;
 	}
-	socket_accept(fd);
+	select_recv(fd);
 }
 
 
