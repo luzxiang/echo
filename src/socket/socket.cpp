@@ -150,29 +150,31 @@ int socket_accept(int sfd)
  *******************************************************************************/
 int select_send(int fd)
 {
-	int ret = 0;
 	int slen = 0;
 	int max_fd = fd;
 	unsigned int sumlen = 0;
 
 	fd_set wfds;
-	auto &buf = g_Clients.at(fd).RecvBuf;
-	for(auto m = buf.begin() ;m != buf.end();)
-	{
-		sumlen = 0;
-		while(sumlen < m->length())
-		{
-			FD_ZERO(&wfds);
-			FD_SET(fd,&wfds);
+	std::deque <string>::iterator m ;
 
-			ret = select(max_fd + 1,NULL,&wfds,NULL,NULL);
-			if(ret == -1)
+	for(auto &c : g_Clients)
+	{
+		for( m = c.second.RecvBuf.begin() ;m != c.second.RecvBuf.end();)
+		{
+			sumlen = 0;
+			while(sumlen < m->length())
 			{
-				printf("select error!!!");
-				return -1;
-			}
-			if(FD_ISSET(fd, &wfds))
-			{
+				FD_ZERO(&wfds);
+				FD_SET(fd,&wfds);
+
+				if(-1 == select(max_fd + 1,NULL,&wfds,NULL,NULL))
+				{
+					printf("select error!!!");
+					return -1;
+				}
+				if(!FD_ISSET(fd, &wfds))
+					continue;
+
 				slen = send(fd,m->data(),m->length(),0);
 				if(slen < 0)
 				{
@@ -181,10 +183,10 @@ int select_send(int fd)
 				}
 				sumlen += slen;
 			}
+			m = c.second.RecvBuf.erase(m);
 		}
-		m = g_Clients.at(fd).RecvBuf.erase(m);
+		c.second.RecvBuf.clear();
 	}
-	g_Clients.at(fd).RecvBuf.clear();
 	return 0;
 }
 
