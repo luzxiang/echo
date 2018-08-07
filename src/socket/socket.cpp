@@ -156,8 +156,8 @@ int select_send(int fd)
 	unsigned int sumlen = 0;
 
 	fd_set wfds;
-	auto buf = g_Clients.at(fd).RecvBuf;
-	for(auto m = buf.begin() ;m != buf.end(); )
+	auto &buf = g_Clients.at(fd).RecvBuf;
+	for(auto m = buf.begin() ;m != buf.end();)
 	{
 		sumlen = 0;
 		while(sumlen < m->length())
@@ -225,7 +225,6 @@ void select_recv(int fd)
 			socket_accept(fd);
 			continue;
 		}
-		//ients.at(fd).RecvBuf.si
 		char recvbuf[1024] = {0};
 		for(auto &m : g_Clients)
 		{
