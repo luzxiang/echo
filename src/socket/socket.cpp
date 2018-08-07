@@ -21,9 +21,11 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/select.h>
-
 #include <iostream>
 using namespace std;
+
+#include "../log/log.h"
+
 #define MAX_FD_NUM 3
 
 struct ClientConnected{
@@ -130,14 +132,10 @@ int socket_accept(int sfd)
 //	for(int i = 0; i < MAX_FD_NUM; ++i)
 //	for(auto c: g_Clients)
 	g_Clients[cfd].fd = cfd;
+	int size = g_Clients.size();
+	printf("cfd=%d g_Clients.size=%d\n",cfd,size);
 	memcpy(&g_Clients[cfd].addr,&cliAddr,sizeof(g_Clients[cfd].addr));
-
-//	{
-//		c.second.fd = cfd;
-//		memcpy(&c.second.addr,&cliAddr,sizeof(c.second.addr));
 	printf("%s :%d\n",inet_ntoa(g_Clients[cfd].addr.sin_addr),g_Clients[cfd].addr.sin_port);
-//		break;
-//	}
 	return 0;
 }
 
