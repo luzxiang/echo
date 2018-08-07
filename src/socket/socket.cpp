@@ -17,6 +17,7 @@
 #include <string>
 #include <deque>
 #include <map>
+#include <memory>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -155,12 +156,11 @@ int select_send(int fd)
 	unsigned int sumlen = 0;
 
 	fd_set wfds;
-
-	std::deque <string>::iterator msg = g_Clients[0].RecvBuf.begin();
-	for(;msg != g_Clients[0].RecvBuf.end();msg = g_Clients[0].RecvBuf.begin())
+	auto buf = g_Clients.at(fd).RecvBuf;
+	for(auto m = buf.begin() ;m != buf.end(); )
 	{
 		sumlen = 0;
-		while(sumlen < msg->length())
+		while(sumlen < m->length())
 		{
 			FD_ZERO(&wfds);
 			FD_SET(fd,&wfds);
@@ -171,21 +171,20 @@ int select_send(int fd)
 				printf("select error!!!");
 				return -1;
 			}
-			//
 			if(FD_ISSET(fd, &wfds))
 			{
-				slen = send(fd,msg->data(),msg->length(),0);
+				slen = send(fd,m->data(),m->length(),0);
 				if(slen < 0)
 				{
-					perror("write");
+					perror("write\n");
 					return -1;
 				}
 				sumlen += slen;
 			}
 		}
-		g_Clients[0].RecvBuf.pop_front();
+		m = g_Clients.at(fd).RecvBuf.erase(m);
 	}
-//	g_RecvBuf.clear();
+	g_Clients.at(fd).RecvBuf.clear();
 	return 0;
 }
 
@@ -199,7 +198,6 @@ int select_send(int fd)
  ******************************************************/
 void select_recv(int fd)
 {
-	int i =0;
 	int ret = 0;
 	int max_fd = fd;
 
@@ -210,16 +208,13 @@ void select_recv(int fd)
 		FD_ZERO(&rfds);
 		FD_SET(fd,&rfds);
 
-		for(i = 0; i < MAX_FD_NUM; ++i)
+		for(auto m:g_Clients)
 		{
-			if(g_Clients[i].fd != -1)
-			{
-				FD_SET(g_Clients[i].fd,&rfds);
-			}
-			max_fd = (max_fd < g_Clients[i].fd)?(g_Clients[i].fd):(max_fd);
+			FD_SET(m.second.fd,&rfds);
+			max_fd = (max_fd < m.first)?(m.first):(max_fd);
 		}
 		ret = select(max_fd + 1, &rfds, NULL,NULL,NULL);
-//		printf("select = %d\n",ret);
+		printf("select = %d\n",ret);
 		if(ret == -1)
 		{
 			printf("select error!!!");
@@ -230,26 +225,28 @@ void select_recv(int fd)
 			socket_accept(fd);
 			continue;
 		}
-		//
-		for(i = 0; ret && i < MAX_FD_NUM; ++i)
+		//ients.at(fd).RecvBuf.si
+		char recvbuf[1024] = {0};
+		for(auto &m : g_Clients)
 		{
-			if(!FD_ISSET(g_Clients[i].fd, &rfds))
+			if(!FD_ISSET(m.second.fd, &rfds))
 				continue;
-			--ret;
-			char recvbuf[1024] = {0};
-			if(0 == recv(g_Clients[i].fd, recvbuf, sizeof(recvbuf), 0))
+			memset(recvbuf,0,sizeof(recvbuf));
+			if(0 == recv(m.second.fd, recvbuf, sizeof(recvbuf), 0))
 			{
-				close(g_Clients[i].fd);
-				g_Clients[i].fd = -1;
+				close(m.second.fd);
+				g_Clients.erase(m.first);
 				printf("socket closed!!!\n");
 				continue;
 			}
-			g_Clients[0].RecvBuf.push_back(recvbuf);
+			m.second.RecvBuf.push_back(recvbuf);
 			printf("recv:%s\n",recvbuf);
-			select_send(g_Clients[i].fd);
+			select_send(m.second.fd);
+			if(--ret) break;
 		}
 	}
 	close(fd);
+	g_Clients.erase(fd);
 }
 
 
