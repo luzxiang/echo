@@ -7,7 +7,7 @@ TARGETS  := echo
 SUFFIX   := $(strip cpp)#源文件的后缀
 PROJDIR  := $(strip ..)#相对于Makefile的目录$(CURDIR) 放在Debug目录下
 SRCDIRS  := $(addprefix $(PROJDIR)/src/,\
-	    . log socket main\
+	    . log socket main fifo\
 	    )#相对于Makefile的目录
 
 LIBS     := -lpthread#-l库名

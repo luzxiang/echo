@@ -178,6 +178,17 @@ Log* Log::GetInstance()
  *******************************************************************************/
 void Log::Level_Set(int argc, char* argv[])
 {
+//	typedef struct{
+//		struct option opt;
+//		const char *commit;
+//	}new_option;
+//
+//	new_option argv_options[] = {
+//			{{"log", 1, NULL, 0},"设置日志级别"},//--log info
+//	        {{"help",  0, NULL, 'h' }, "打印帮助"},//--help / -h
+//	        {{0, 0, 0, 0 }, 0}
+//	};
+
     const char TYPENUM = 6;
     const char TONUM = 3;
     string loghead("log:");
