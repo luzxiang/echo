@@ -44,9 +44,9 @@ void socket_client(char *ip,int port)
 		}
 	});
 	show.detach();
-	for(int i = 0; i <= 50000; i++)
+	for(int i = 0; i <= 10000000; i++)
 	{
-		sprintf(buf,"mesg%d",i);
+		sprintf(buf,"msg1234567890abcdefghijklmnopqrstuvwxyz(%d)",i);
 		skt->Put(buf,strlen(buf));
 	}
 	while(std::cin.getline(buf,sizeof(buf)))

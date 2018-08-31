@@ -12,8 +12,8 @@
 #include "../fifo/fifo.h"
 
 #define IP_LEN_ 			(48)
-#define R_BUF_LEN_			(8*1024*1024)
-#define W_BUF_LEN_			(8*1024*1024)
+#define R_BUF_LEN_			(2*1024*1024)
+#define W_BUF_LEN_			(2*1024*1024)
 
 class Socket{
 private:
