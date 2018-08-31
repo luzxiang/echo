@@ -41,7 +41,7 @@
 using namespace std;
 /*日志的存放的根目录*/
 #ifdef OS_LINUX_LOG
-#include "color.h"
+#include "../log/color.h"
 #define LOGROOTPATH "/var/log/"
 /*只保留日志的天数，N天前的将被清理*/
 #define LOG_KEEP_NDAY (3)
@@ -115,6 +115,9 @@ extern void Push(int logtype, const char* logmsg, ...);
 
 #else
 
+#include <list>
+#include <pthread.h>
+#include <sys/timeb.h>
 class Log;
 extern "C++" const char *basename (const char *__filename);
 
@@ -139,21 +142,22 @@ extern "C++" const char *basename (const char *__filename);
             Log::GetInstance()->Push(LOGINFO,"%s|%d|%s|INFO| " fmt,basename(__FILE__),__LINE__,__FUNCTION__,##__VA_ARGS__);\
     }while(0)
 
-#define LOG_ADD(fmt,...) do{\
-        if(Log::GetInstance()->level == LOGINFO){\
-			printf(fmt,##__VA_ARGS__);\
+#define LOG_ADD(word) do{\
+        if(Log::GetInstance()->level >= LOGINFO){\
+			std::cout<<(word);\
 			fflush(stdout);\
         }\
     }while(0)
 
-#define LOG_DEBUG(fmt,...) do{\
+#define LOG_DEBUG(fmt,...) \
+	do{\
         if(Log::GetInstance()->level >= LOGDEBUG)\
             Log::GetInstance()->Push(LOGDEBUG,"%s|%d|%s|DEBUG| " fmt,basename(__FILE__),__LINE__,__FUNCTION__,##__VA_ARGS__);\
     }while(0)
 
 #define LOG_WATCH(args) do{\
         if(Log::GetInstance()->level >= LOGDEBUG)\
-			std::cout<<UNLINE()ANSI("1;36")<<basename(__FILE__)<<"|"<<__LINE__<<"|"<<__FUNCTION__<<"|WATCH "<<#args<<"="<<(args)<<NONE()<<endl;\
+			std::cout<<ANSI("1;36")<<basename(__FILE__)<<"|"<<__LINE__<<"|"<<__FUNCTION__<<"|WATCH "<<#args<<"="<<UNLINE()<<(args)<<NONE()<<endl;\
     }while(0)
 
 #define LOG_TRACE(fmt,...) do{\
@@ -166,10 +170,6 @@ extern "C++" const char *basename (const char *__filename);
             Log::GetInstance()->Push(LOGFILE,"%s|%d|%s|FILE| " fmt,basename(__FILE__),__LINE__,__FUNCTION__,##__VA_ARGS__);\
     }while(0)
 
-
-#include <list>
-#include <pthread.h>
-#include <sys/timeb.h>
 class Log
 {
 private:

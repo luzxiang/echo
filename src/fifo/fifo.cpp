@@ -14,6 +14,9 @@ FIFO::FIFO(unsigned int sz)
     Init(sz);
     buffer = new char[sz];
     need_free_buffer_ = true;
+
+    mtx = PTHREAD_MUTEX_INITIALIZER;
+    cv = PTHREAD_COND_INITIALIZER;
 }
 
 FIFO::FIFO(char *buf, unsigned int sz)
@@ -21,6 +24,8 @@ FIFO::FIFO(char *buf, unsigned int sz)
     Init(sz);
     buffer = buf;
     need_free_buffer_ = false;
+    mtx = PTHREAD_MUTEX_INITIALIZER;
+    cv = PTHREAD_COND_INITIALIZER;
 }
 
 FIFO::~FIFO()

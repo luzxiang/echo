@@ -63,7 +63,6 @@ private:
     //标识是否拥有buffer
     bool need_free_buffer_;
 };
-
 inline std::ostream &
 operator << (std::ostream &os, const FIFO &fifo)
 {

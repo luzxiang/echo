@@ -1,18 +1,13 @@
-﻿#include <stdio.h>
+﻿
+#ifdef OS_WIN
+#include "../Main/stdafx.h"
+#endif
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <algorithm>
-#include "log.h"
-
-#ifndef OS_WIN_LOG
-#ifndef OS_LINUX_LOG
-//#define  OS_WIN_LOG		//在WIN平台下编译
-#ifndef OS_WIN_LOG
-#define  OS_LINUX_LOG      //在Linux平台下编译
-#endif
-#endif
-#endif
+#include "../log/log.h"
 
 #ifdef OS_LINUX_LOG
 #include <sys/stat.h>
@@ -82,8 +77,9 @@ Log* Log::pLog = NULL;
 //鍙�氳繃鎵嬪姩杈撳叆绋嬪簭鍚姩鍙傛暟鎵撳紑鏈湴鏂囦欢鏃ュ織
 static bool tofile = false; //榛樿涓嶈褰曞埌鏈湴鏂囦欢
 static bool toterminal = true; //
-const unsigned int LOG_PATH_LEN = 1024 * 2;
-const unsigned int LOG_FILE_NAME_LEN = 510;
+const unsigned int PATH_LEN = 1024 * 2;
+const unsigned int FILE_NAME_LEN = 510;
+
 
 //Log鏋勯�犲嚱鏁�
 Log::Log(const char* logname)
@@ -178,17 +174,6 @@ Log* Log::GetInstance()
  *******************************************************************************/
 void Log::Level_Set(int argc, char* argv[])
 {
-//	typedef struct{
-//		struct option opt;
-//		const char *commit;
-//	}new_option;
-//
-//	new_option argv_options[] = {
-//			{{"log", 1, NULL, 0},"设置日志级别"},//--log info
-//	        {{"help",  0, NULL, 'h' }, "打印帮助"},//--help / -h
-//	        {{0, 0, 0, 0 }, 0}
-//	};
-
     const char TYPENUM = 6;
     const char TONUM = 3;
     string loghead("log:");
@@ -244,7 +229,7 @@ void Log::Level_Set(int argc, char* argv[])
  * Author       : luzxiang
  * Notes        : --
  *******************************************************************************/
-int Create_multi_dir(const char *path)
+static int create_multi_dir(const char *path)
 {
     if ( NULL == path)
     {
@@ -267,14 +252,18 @@ int Create_multi_dir(const char *path)
         if (dir_path[i] == '/' && i > 0)
         {
             dir_path[i] = '\0';
-            if (access(dir_path, F_OK) < 0)
-            {
-                if (mkdir(dir_path, 0755) < 0)
-                {
-                    free(dir_path);
-                    return -1;
-                }
-            }
+			if ( 0 != access( dir_path , F_OK ) )
+			{
+				if ( 0 != mkdir( dir_path , 0755 ) )
+				{
+					if ( 0 != access( dir_path , F_OK ) )
+					{
+						printf( "mkdir=%s\n" , dir_path );
+						free( dir_path );
+						return -1;
+					}
+				}
+			}
             dir_path[i] = '/';
         }
     }
@@ -298,8 +287,8 @@ bool ReDeleteFile(char *path, bool bDelTopDir)
     DIR *dir = NULL;
     struct dirent *s_dir;
     struct stat file_stat;
-    char curfile[LOG_PATH_LEN + LOG_FILE_NAME_LEN] = { 0 };
-    char strPath[LOG_PATH_LEN] = { 0 };
+    char curfile[PATH_LEN + FILE_NAME_LEN] = { 0 };
+    char strPath[PATH_LEN] = { 0 };
 
     snprintf(strPath, sizeof(strPath), "%s", path);
     int len = strlen(path);
@@ -322,12 +311,8 @@ bool ReDeleteFile(char *path, bool bDelTopDir)
         if (S_ISDIR(file_stat.st_mode))      //濡傛灉鏄洰褰�
         {
             ReDeleteFile(curfile, bDelTopDir);	//閫掑綊鍒犻櫎鐩綍涓嬬殑鏂囦欢
-            remove(curfile);					//鐩綍娓呯┖鍚庯紝鍒犻櫎璇ョ洰褰�
         }
-        else					//鏄枃浠�
-        {
-            remove(curfile);	//鍒犻櫎鏂囦欢
-        }
+        remove(curfile);	//鍒犻櫎鏂囦欢
     }
     closedir(dir);
     if (bDelTopDir)	//鏈�缁堢洰褰曡娓呯┖浜嗭紝鍒犻櫎璇ョ洰褰�
@@ -434,9 +419,8 @@ bool Log::Handle(void)
     struct tm *nowtime;
     ftime(&tb);
     nowtime = localtime(&tb.time);
-
     //璺ㄥぉ鏃讹紝闇�瑕侀噸鏂扮敓鎴愬伐浣滅洰褰�
-    if ((this->fileSize == -1) || (this->filetime.tm_hour != nowtime->tm_hour && nowtime->tm_min == 0))
+    if ((this->fileSize == -1) || this->filetime.tm_hour != nowtime->tm_hour)
     {
         UpdateLogFileDateTime(nowtime);
         EndCurLogFile();
@@ -482,31 +466,33 @@ bool Log::Handle(void)
 void* LogProc(void *p)
 {
     Log *plog = (Log*) p;
-    list<LogMsg_st>::iterator it;
-    pthread_mutex_lock(&plog->pMtx);
+    int i = 0;
+    const int MAXNUM = 50;
+    const int SLEEPUS = 1*1000;
 
+	struct timespec tout;
+	memset(&tout, 0, sizeof(tout));
+	tout.tv_nsec = 0;
+    list<LogMsg_st>::iterator it;
     while (1)
     {
-        while (plog->logList.size() == 0)
+    	plog->Handle();
+    	pthread_mutex_lock(&plog->pMtx);
+        while (plog->logList.empty())
         {
-            pthread_cond_wait(&plog->pCond,&plog->pMtx);
+        	tout.tv_sec = time(0) + 3;
+        	pthread_cond_timedwait(&plog->pCond, &plog->pMtx, &tout);
         }
-		if (false == plog->Handle())
-		{
-			continue;
-		}
 		it = plog->logList.begin();
-		for (int i = 0; plog->logList.end() != it; it = plog->logList.begin())
+		for (i = 0; plog->logList.end() != it; it = plog->logList.begin())
 		{
 			plog->Write((*it).str);		//鍐欏埌鏈湴鏃ュ織鏂囦欢
 			plog->logList.pop_front();
-			if (++i == 10)
-			{
-				break;
-			}
+			if(++i >= MAXNUM) break;
 		}
+        pthread_mutex_unlock(&plog->pMtx);//临界区数据操作完毕，释放互斥锁
+		usleep(SLEEPUS);
     }
-    pthread_mutex_unlock(&plog->pMtx);//临界区数据操作完毕，释放互斥锁
     return NULL;
 }
 /*******************************************************************************
@@ -603,15 +589,11 @@ bool Log::CreateFile(string filename)
  *******************************************************************************/
 void Log::Write(string logstr)
 {
-    if ("" == logstr)
-    {
+    if (logstr.empty())
         return;
-    }
     FILE* flog = fopen(this->path, "at+");
     if ( NULL == flog)
-    {
         return;
-    }
     fputs(logstr.c_str(), flog);
     fputs("\r\n", flog);           //fputs涓嶄細鑷姩鎹㈣
     fflush(flog);
@@ -690,7 +672,7 @@ bool Log::CheckLogPath()
         return false;
     if (0 != access(this->dir, 0))
     {
-        if (0 != Create_multi_dir(this->dir))
+        if (0 != create_multi_dir(this->dir))
         {
             return false;
         }
@@ -718,7 +700,7 @@ void Log::Wait()
 #else/*OS_Win*/
 
 #include <Windows.h>
-#include <time.h>
+#include <time.h> 
 
 int level = LOGINFO;
 /*******************************************************************************
@@ -780,15 +762,15 @@ void Push(int logtype, const char* logmsg, ...)
     va_start(args, logmsg);
     vsprintf_s(_logmsg, logmsg, args);			//灏嗘棩蹇楀唴瀹逛粠鍙傛暟涓嬁鍑烘潵
     va_end(args);
-
+	 
 	 time_t the_time;
      time(&the_time);
-
+	 
 	 char strtime[50]={0};
-	 tm* t_tm = localtime(&the_time);
+	 tm* t_tm = localtime(&the_time); 
 	 _snprintf_s(strtime,sizeof(strtime),"%02d:%02d:%02d",t_tm->tm_hour,t_tm->tm_min,t_tm->tm_sec);
 
-    _snprintf_s(LogBuf.str, sizeof(LogBuf.str),
+    _snprintf_s(LogBuf.str, sizeof(LogBuf.str), 
             "[%s] %s.\n",
             strtime, _logmsg								//鎭㈠ANSI灞炴��
             );
