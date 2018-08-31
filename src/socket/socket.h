@@ -12,16 +12,18 @@
 #include "../fifo/fifo.h"
 
 #define IP_LEN_ 			(48)
-#define R_BUF_LEN_			(2*1024*1024)
-#define W_BUF_LEN_			(2*1024*1024)
+#define R_BUF_LEN_			(32*1024*1024)//
+#define W_BUF_LEN_			(32*1024*1024)//
+
+#define RWBUF_LEN_    	    (4*1024*1024)
 
 class Socket{
 private:
     int fd;
 	FIFO* wBuf;
 	FIFO* rBuf;
-	char wbuf[1024 * 16];
-	char rbuf[1024 * 16];
+	char *wbuf;
+	char *rbuf;
 	std::thread rPthread;  //接收数据线程
 	std::thread wPthread;  //发送数据线程
     bool wThdIsStart;
@@ -44,7 +46,7 @@ private:
 	void OnRead(void);
 	int Reading(void);
 	int Writing(const char *buf, const size_t len);
-	void OnReceive(char *buf, int len);
+	int OnReceive(char *buf, unsigned int len);
 public:
 	Socket(void);
 	Socket(char*ip, int port);
@@ -52,7 +54,9 @@ public:
 	void Start(void);
 	void Release(void);
     unsigned int rBufLen(void);
+    unsigned int rFreeLen(void);
     unsigned int wBufLen(void);
+    unsigned int wFreeLen(void);
 	unsigned int GetLastAlivedTime(void);
 	unsigned int Get(char *buf, unsigned int len);
 	unsigned int Put(const char *buf, unsigned int len);

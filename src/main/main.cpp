@@ -44,10 +44,14 @@ void socket_client(char *ip,int port)
 		}
 	});
 	show.detach();
-	for(int i = 0; i <= 10000000; i++)
+	for(int i = 0; i <= 100000; i++)
 	{
 		sprintf(buf,"msg1234567890abcdefghijklmnopqrstuvwxyz(%d)",i);
-		skt->Put(buf,strlen(buf));
+		while(skt->Put(buf,strlen(buf)) == 0)
+		{
+			LOG_WARN("skt->wBufLen=%d,skt->wFreeLen=%d",skt->wBufLen(),skt->wFreeLen());
+			usleep(100);
+		}
 	}
 	while(std::cin.getline(buf,sizeof(buf)))
 	{
@@ -58,8 +62,8 @@ void socket_client(char *ip,int port)
 }
 void socket_test(char mode = 's')
 {
-    char ip[] = "127.0.0.1";//"66.154.108.47";//
-    int port = 4141;
+    char ip[] = "10.194.10.1";//127.0.0.1";//"66.154.108.47";//
+    int port = 4433;
 
     if(mode == 's')
     {
