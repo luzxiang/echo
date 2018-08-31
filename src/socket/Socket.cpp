@@ -30,10 +30,10 @@ void Socket::SetSockOpt(void)
 	int reuse0=1;
 	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&reuse0 , sizeof(reuse0));
 
-    int rLen = 256 * 1024;       //设置为32K
+    int rLen = 1*1024 * 1024;       //设置为32K
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*) &rLen, sizeof(rLen));
     //发送缓冲区
-    int wLen = 256 * 1024;       //设置为32K
+    int wLen = 1*1024 * 1024;       //设置为32K
     setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*) &wLen, sizeof(wLen));
     int tout = 5*1000; //5秒
     //发送时限

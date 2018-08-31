@@ -26,7 +26,6 @@ using namespace std;
 
 void socket_client(char *ip,int port)
 {
-	char buf[255] = {0};
 
 	Socket *skt = new Socket(ip, port);
 	skt->Start();
@@ -44,18 +43,39 @@ void socket_client(char *ip,int port)
 		}
 	});
 	show.detach();
-	for(int i = 0; i <= 100000; i++)
+	char buf[1024*1024] = {0};
+	unsigned int sumLen = 0;
+	int len = 0;
+	FILE *file = fopen("./data","rb");
+	unsigned int start = time(0);
+	LOG_WATCH(time(0));
+	while ((len = fread(buf, 1, sizeof(buf), file)) > 0) //读磁盘文件
 	{
-		sprintf(buf,"msg1234567890abcdefghijklmnopqrstuvwxyz(%d)",i);
-		while(skt->Put(buf,strlen(buf)) == 0)
+		while(skt->Put(buf,len) == 0)
 		{
-			LOG_WARN("skt->wBufLen=%d,skt->wFreeLen=%d",skt->wBufLen(),skt->wFreeLen());
-			usleep(100);
+			usleep(1000);
 		}
+		sumLen += len;
 	}
+	LOG_WATCH(skt->wFreeLen());
+	LOG_WATCH(skt->wBufLen());
+	LOG_WATCH(time(0)-start);
+	LOG_WATCH(sumLen);
+//	for(int i = 0; i <= 100000; i++)
+//	{
+//		sprintf(buf,"msg1234567890abcdefghijklmnopqrstuvwxyz(%d)",i);
+//		len = strlen(buf);
+
+//		sumLen += len;
+//		while(skt->Put(buf,len) == 0)
+//		{
+//			usleep(100);
+//		}
+//	}
 	while(std::cin.getline(buf,sizeof(buf)))
 	{
-		skt->Put(buf,strlen(buf));
+		len = strlen(buf);
+		skt->Put(buf,len);
 	}
 	getchar();
 	skt->Release();

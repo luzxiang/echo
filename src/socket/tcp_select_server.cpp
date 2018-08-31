@@ -28,7 +28,7 @@ using namespace std;
 #include "../log/log.h"
 
 #define MAX_FD_NUM 3
-
+FILE * fhandle = NULL;
 struct ClientConnected{
 	int fd;
 	struct sockaddr_in addr;
@@ -218,7 +218,7 @@ void select_recv(int fd)
 			max_fd = (max_fd < m.first)?(m.first):(max_fd);
 		}
 		ret = select(max_fd + 1, &rfds, NULL,NULL,NULL);
-		printf("select = %d\n",ret);
+//		printf("select = %d\n",ret);
 		if(ret == -1)
 		{
 			printf("select error!!!");
@@ -236,16 +236,23 @@ void select_recv(int fd)
 			if(!FD_ISSET(m.second.fd, &rfds))
 				continue;
 			memset(recvbuf,0,sizeof(recvbuf));
-			if(len == recv(m.second.fd, recvbuf, sizeof(recvbuf), 0))
+			len = recv(m.second.fd, recvbuf, sizeof(recvbuf), 0);
+			if(len <  0)
 			{
 				close(m.second.fd);
 				g_Clients.erase(m.first);
 				printf("socket closed!!!\n");
 				continue;
 			}
-			m.second.RecvBuf.push_back(recvbuf);
-			printf("recv:%s\n",recvbuf);
-			select_send(m.second.fd);
+//			m.second.RecvBuf.push_back(recvbuf);
+			if(fhandle){
+//				printf("[len=%d]%s",len,recvbuf);
+				fwrite(recvbuf, len, 1, fhandle);
+				fflush(fhandle);
+			}else{
+				perror("fhandle==NULL\n");
+			}
+//			select_send(m.second.fd);
 			if(--ret) break;
 		}
 	}
@@ -264,6 +271,13 @@ void select_recv(int fd)
  *******************************************************************************/
 void socket_create_server(int port)
 {
+	FILE*fdata = fopen64( "./data.txt" , "w" );
+	char recvbuf[] = "12345";
+	fwrite(recvbuf, sizeof(recvbuf), 1, fdata);
+	fclose(fdata);
+
+	fhandle = fopen64("./fdata.txt" , "w");
+
 	int fd = socket_create(port);
 	if(fd == -1)
 	{
@@ -271,6 +285,7 @@ void socket_create_server(int port)
 		return ;
 	}
 	select_recv(fd);
+	fclose(fhandle);
 }
 
 
