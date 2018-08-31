@@ -51,6 +51,9 @@ static int set_socketopt(int fd)
 {
 	int b_on = 0;
     ioctl(fd, FIONBIO, &b_on);
+	int reuse0=1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&reuse0 , sizeof(reuse0));
+
 	//Linux环境下，须如下定义：
 	struct timeval timeout = {3,0};
 	//设置发送超时
@@ -89,13 +92,13 @@ int socket_create(int port)
 	g_sevrAddr.sin_port = htons(port);
 	g_sevrAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
+	set_socketopt(fd);
 	if(bind(fd, (struct sockaddr*)&g_sevrAddr,sizeof(g_sevrAddr)) == -1)
 	{
 		printf("bind error!!!");
 		return -1;
 	}
 
-	set_socketopt(fd);
 
 	if(listen(fd, 20) == -1)
 	{
