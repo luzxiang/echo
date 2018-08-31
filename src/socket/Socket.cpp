@@ -263,7 +263,6 @@ int Socket::Connect(void)
  *******************************************************************************/
 int Socket::ReConnect(void)
 {
-<<<<<<< HEAD
 	this->Close();
 	return this->Connect();
 }
@@ -424,45 +423,6 @@ int Socket::Reading(void)
         	printf("send error: %s\n", strerror(errno));
         }
     }
-=======
-	int slen = 0;
-	int max_fd = fd;
-	unsigned int sumlen = 0;
-
-	fd_set wfds;
-	std::deque <string>::iterator m ;
-
-	for(auto &c : g_Clients)
-	{
-		for( m = c.second.RecvBuf.begin() ;m != c.second.RecvBuf.end();)
-		{
-			sumlen = 0;
-			while(sumlen < m->length())
-			{
-				FD_ZERO(&wfds);
-				FD_SET(fd,&wfds);
-
-				if(-1 == select(max_fd + 1,NULL,&wfds,NULL,NULL))
-				{
-					printf("select error!!!");
-					return -1;
-				}
-				if(!FD_ISSET(fd, &wfds))
-					continue;
-
-				slen = send(fd,m->data(),m->length(),0);
-				if(slen < 0)
-				{
-					perror("write\n");
-					return -1;
-				}
-				sumlen += slen;
-			}
-			m = c.second.RecvBuf.erase(m);
-		}
-		c.second.RecvBuf.clear();
-	}
->>>>>>> 59a34460567fbf61b85b38bd89bd8181af810a44
 	return 0;
 }
 /*******************************************************************************
@@ -475,59 +435,8 @@ int Socket::Reading(void)
  *******************************************************************************/
 void Socket::OnReceive(char *buf, int len)
 {
-<<<<<<< HEAD
 	lastAlivedTime = time(0);
 	this->rBuf->Put(buf,len);
-=======
-	int ret = 0;
-	int max_fd = fd;
-
-	fd_set rfds;
-
-	while(1)
-	{
-		FD_ZERO(&rfds);
-		FD_SET(fd,&rfds);
-
-		for(auto m:g_Clients)
-		{
-			FD_SET(m.second.fd,&rfds);
-			max_fd = (max_fd < m.first)?(m.first):(max_fd);
-		}
-		ret = select(max_fd + 1, &rfds, NULL,NULL,NULL);
-		printf("select = %d\n",ret);
-		if(ret == -1)
-		{
-			printf("select error!!!");
-			break;
-		}
-		if(FD_ISSET(fd, &rfds))
-		{
-			socket_accept(fd);
-			continue;
-		}
-		char recvbuf[1024] = {0};
-		for(auto &m : g_Clients)
-		{
-			if(!FD_ISSET(m.second.fd, &rfds))
-				continue;
-			memset(recvbuf,0,sizeof(recvbuf));
-			if(0 == recv(m.second.fd, recvbuf, sizeof(recvbuf), 0))
-			{
-				close(m.second.fd);
-				g_Clients.erase(m.first);
-				printf("socket closed!!!\n");
-				continue;
-			}
-			m.second.RecvBuf.push_back(recvbuf);
-			printf("recv:%s\n",recvbuf);
-			select_send(m.second.fd);
-			if(--ret) break;
-		}
-	}
-	close(fd);
-	g_Clients.erase(fd);
->>>>>>> 59a34460567fbf61b85b38bd89bd8181af810a44
 }
 /*******************************************************************************
  * Function     : Socket::Get
