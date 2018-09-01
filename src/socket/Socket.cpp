@@ -65,8 +65,8 @@ Socket::Socket(void)
     wThdIsStart = false;
     IsConnected = false;         //连接状态
 
-	wbuf = (char*)malloc(RWBUF_LEN_);
-	rbuf = (char*)malloc(RWBUF_LEN_);
+	wbuf = new char[RWBUF_LEN_];//(char*)malloc(RWBUF_LEN_);
+	rbuf = new char[RWBUF_LEN_];//(char*)malloc(RWBUF_LEN_);
     memset(wbuf,0,RWBUF_LEN_);
     memset(rbuf,0,RWBUF_LEN_);
 
@@ -93,8 +93,8 @@ Socket::Socket(char*ip, int port)
     wThdIsStart = false;
     IsConnected = false;         //连接状态
     memset(&SvrAddr,0,sizeof(SvrAddr));
-	wbuf = (char*)malloc(RWBUF_LEN_);
-	rbuf = (char*)malloc(RWBUF_LEN_);
+	wbuf = new char[RWBUF_LEN_];//(char*)malloc(RWBUF_LEN_);
+	rbuf = new char[RWBUF_LEN_];//(char*)malloc(RWBUF_LEN_);
     memset(wbuf,0,RWBUF_LEN_);
     memset(rbuf,0,RWBUF_LEN_);
     Port = port;
@@ -218,21 +218,21 @@ void Socket::Release(void)
 	std::this_thread::sleep_for(std::chrono::microseconds(10));
 	if(rFifo != nullptr)
 	{
-		LOG_INFO("free(rBuf)");
-		free(rFifo);
+		LOG_INFO("free(rFifo)");
+		delete rFifo;//free(rFifo);
 	}
 	if(wFifo != nullptr)
 	{
-		LOG_INFO("free(wBuf)");
-		free(wFifo);
+		LOG_INFO("free(wFifo)");
+		delete wFifo;//free(wFifo);
 	}
 	if(wbuf != nullptr)
 	{
-		free(wbuf);
+		delete[] wbuf;//free(wbuf);
 	}
 	if(rbuf != nullptr)
 	{
-		free(rbuf);
+		delete[] rbuf;//free(rbuf);
 	}
 }
 
