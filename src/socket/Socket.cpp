@@ -30,10 +30,10 @@ void Socket::SetSockOpt(void)
 	int reuse0=1;
 	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&reuse0 , sizeof(reuse0));
 
-    int rLen = 1*1024 * 1024;       //设置为32K
+    int rLen = 8*1024 * 1024;       //设置为32K
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*) &rLen, sizeof(rLen));
     //发送缓冲区
-    int wLen = 1*1024 * 1024;       //设置为32K
+    int wLen = 8*1024 * 1024;       //设置为32K
     setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*) &wLen, sizeof(wLen));
     int tout = 5*1000; //5秒
     //发送时限
@@ -55,8 +55,8 @@ void Socket::SetSockOpt(void)
  *******************************************************************************/
 Socket::Socket(void)
 {
-	rBuf = new FIFO(R_BUF_LEN_);
-	wBuf = new FIFO(W_BUF_LEN_);
+	rFifo = new sockt_fifo_st(R_FIFO_BUF_LEN_);
+	wFifo = new sockt_fifo_st(W_FIFO_BUF_LEN_);
 
     fd = -1;
     Encrypt = 0;
@@ -83,8 +83,8 @@ Socket::Socket(void)
  *******************************************************************************/
 Socket::Socket(char*ip, int port)
 {
-	rBuf = new FIFO(R_BUF_LEN_);
-	wBuf = new FIFO(W_BUF_LEN_);
+	rFifo = new sockt_fifo_st(R_FIFO_BUF_LEN_);
+	wFifo = new sockt_fifo_st(W_FIFO_BUF_LEN_);
 
     fd = -1;
     Encrypt = 0;
@@ -123,7 +123,7 @@ Socket::~Socket(void)
  *******************************************************************************/
 unsigned int Socket::wFreeLen(void)
 {
-	return (W_BUF_LEN_ - this->wBuf->Len());
+	return (W_FIFO_BUF_LEN_ - this->wFifo->Len());
 }
 
 /*******************************************************************************
@@ -136,7 +136,7 @@ unsigned int Socket::wFreeLen(void)
  *******************************************************************************/
 unsigned int Socket::wBufLen(void)
 {
-	return this->wBuf->Len();
+	return this->wFifo->Len();
 }
 /*******************************************************************************
  * Function     : Socket::wLength
@@ -148,7 +148,7 @@ unsigned int Socket::wBufLen(void)
  *******************************************************************************/
 unsigned int Socket::rFreeLen(void)
 {
-	return (R_BUF_LEN_ - this->rBuf->Len());
+	return (R_FIFO_BUF_LEN_ - this->rFifo->Len());
 }
 /*******************************************************************************
  * Function     : Socket::rLength
@@ -160,7 +160,7 @@ unsigned int Socket::rFreeLen(void)
  *******************************************************************************/
 unsigned int Socket::rBufLen(void)
 {
-	return this->rBuf->Len();
+	return this->rFifo->Len();
 }
 
 /*******************************************************************************
@@ -216,15 +216,23 @@ void Socket::Release(void)
     	wPthread.join();
     }
 	std::this_thread::sleep_for(std::chrono::microseconds(10));
-	if(rBuf != nullptr)
+	if(rFifo != nullptr)
 	{
 		LOG_INFO("free(rBuf)");
-		free(rBuf);
+		free(rFifo);
 	}
-	if(wBuf != nullptr)
+	if(wFifo != nullptr)
 	{
 		LOG_INFO("free(wBuf)");
-		free(wBuf);
+		free(wFifo);
+	}
+	if(wbuf != nullptr)
+	{
+		free(wbuf);
+	}
+	if(rbuf != nullptr)
+	{
+		free(rbuf);
 	}
 }
 
@@ -365,26 +373,18 @@ void Socket::OnWrite(void)
 {
 	LOG_INFO("Start Thread of OnWrite...");
 	int onwlen = 0;
-	struct timespec tout;
-	memset(&tout, 0, sizeof(tout));
-	tout.tv_nsec = 0;
 
 	wThdIsStart = true;
-	pthread_mutex_lock(&this->wBuf->mtx);
+	this->wFifo->lock();
     while(wThdIsStart){
-        while(this->wBuf->Empty() && wThdIsStart)
+        while(this->wFifo->Empty() && wThdIsStart)
         {
-        	tout.tv_sec = time(0) + 3;
-//        	LOG_DEBUG("pthread_cond_timedwait begin");
-        	pthread_cond_timedwait(&this->wBuf->cv, &this->wBuf->mtx,&tout);
-//        	LOG_DEBUG("pthread_cond_timedwait end");
+        	this->wFifo->timewait(3);
         	if (!this->IsConnected)
         		break;
         }
-//        LOG_DEBUG("pthread_cond_timedwait out");
-//    	LOG_WATCH(this->wBufLen());
     	if (this->IsConnected){
-			onwlen = this->wBuf->Get(wbuf,sizeof(this->wbuf));
+			onwlen = this->wFifo->Get(wbuf,sizeof(this->wbuf));
         	Writing(wbuf,onwlen);
         }else{
         	LOG_WARN("socket is disconnected!!!");
@@ -392,7 +392,7 @@ void Socket::OnWrite(void)
         	continue;
         }
     }
-    pthread_mutex_unlock(&this->wBuf->mtx);
+    this->wFifo->unlock();
     LOG_INFO("Finish Thread of OnWrite...");
 }
 /*******************************************************************************
@@ -488,7 +488,7 @@ int Socket::OnReceive(char *buf,unsigned int len)
 	lastAlivedTime = time(0);
 	if(this->rFreeLen() >= len)
 	{
-		return this->rBuf->Put(buf,len);
+		return this->rFifo->Put(buf,len);
 	}
 	return 0;
 }
@@ -502,7 +502,7 @@ int Socket::OnReceive(char *buf,unsigned int len)
  *******************************************************************************/
 unsigned int Socket::Get(char *buf, unsigned int len)
 {
-	return this->rBuf->Get(buf,len);
+	return this->rFifo->Buf->Get(buf,len);
 }
 /*******************************************************************************
  * Function     : Socket::Put
@@ -515,13 +515,10 @@ unsigned int Socket::Get(char *buf, unsigned int len)
 unsigned int Socket::Put(const char *buf, unsigned int len)
 {
 	int plen = 0;
-//    pthread_mutex_lock(&this->wBuf->mtx);//需要操作head这个临界资源，先加锁，
 	if(this->wFreeLen() >= len)
 	{
-		plen = this->wBuf->Put(buf,len);
-    	pthread_cond_signal(&this->wBuf->cv);
+		plen = this->wFifo->Put(buf,len);
 	}
-//    pthread_mutex_unlock(&this->wBuf->mtx);//解锁
 	return plen;
 }
 

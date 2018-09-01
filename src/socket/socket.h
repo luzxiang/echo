@@ -12,16 +12,81 @@
 #include "../fifo/fifo.h"
 
 #define IP_LEN_ 			(48)
-#define R_BUF_LEN_			(32*1024*1024)//
-#define W_BUF_LEN_			(32*1024*1024)//
+#define R_FIFO_BUF_LEN_			(32*1024*1024)//
+#define W_FIFO_BUF_LEN_			(32*1024*1024)//
 
 #define RWBUF_LEN_    	    (4*1024*1024)
+
+typedef struct sockt_fifo{
+	FIFO *Buf;
+    pthread_mutex_t mtx;
+    pthread_cond_t cv;
+    //数据写入缓冲区
+    unsigned int Put(const char *buf, unsigned int len)
+    {
+    	len = Buf->Put(buf, len);
+    	pthread_cond_signal(&this->cv);
+    	return len;
+    }
+
+//
+//
+//
+    void lock(void)
+    {
+    	pthread_mutex_lock(&this->mtx);
+    }
+    unsigned int timewait(unsigned int tout_s)
+    {
+    	struct timespec tout;
+    	memset(&tout, 0, sizeof(tout));
+    	tout.tv_nsec = 0;
+    	tout.tv_sec = time(0) + tout_s;
+    	pthread_cond_timedwait(&this->cv, &this->mtx,&tout);
+    	return 0;
+    }
+    void unlock(void)
+    {
+    	pthread_mutex_unlock(&this->mtx);
+    }
+    //从缓冲给读取数据
+    unsigned int Get(char *buf, unsigned int len)
+    {
+    	return Buf->Get(buf, len);
+    }
+    //返回缓冲区中数据长度
+    unsigned int Len(){
+    	return Buf->Len();
+    }
+    bool Empty()
+    {
+    	return Buf->Empty();
+    }
+	sockt_fifo(unsigned int size = 1024)
+	{
+		Buf = new FIFO(size);
+	    mtx = PTHREAD_MUTEX_INITIALIZER;
+	    cv = PTHREAD_COND_INITIALIZER;
+	}
+	sockt_fifo(char *buf, unsigned int size)
+	{
+		Buf = new FIFO(buf, size);
+	    mtx = PTHREAD_MUTEX_INITIALIZER;
+	    cv = PTHREAD_COND_INITIALIZER;
+	}
+	~sockt_fifo()
+	{
+		if(Buf){
+			free(Buf);
+		}
+	}
+}sockt_fifo_st;
 
 class Socket{
 private:
     int fd;
-	FIFO* wBuf;
-	FIFO* rBuf;
+    sockt_fifo_st* wFifo;
+    sockt_fifo_st* rFifo;
 	char *wbuf;
 	char *rbuf;
 	std::thread rPthread;  //接收数据线程

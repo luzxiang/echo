@@ -57,8 +57,6 @@ public:
     unsigned int in;
     //读位置
     unsigned int out;
-    pthread_mutex_t mtx;
-    pthread_cond_t cv;
 private:
     //标识是否拥有buffer
     bool need_free_buffer_;
