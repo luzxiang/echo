@@ -32,11 +32,20 @@ typedef struct sockt_fifo{
     {
     	pthread_mutex_lock(&this->mtx);
     }
-    unsigned int timewait(unsigned int tout_s)
+    unsigned int timewait(long int tout_s)
     {
     	struct timespec tout;
     	memset(&tout, 0, sizeof(tout));
     	tout.tv_nsec = 0;
+    	tout.tv_sec = time(0) + tout_s;
+    	pthread_cond_timedwait(&this->cv, &this->mtx,&tout);
+    	return 0;
+    }
+    unsigned int timewait(long int tout_s, long int tout_nsec)
+    {
+    	struct timespec tout;
+    	memset(&tout, 0, sizeof(tout));
+    	tout.tv_nsec = tout_nsec;
     	tout.tv_sec = time(0) + tout_s;
     	pthread_cond_timedwait(&this->cv, &this->mtx,&tout);
     	return 0;
@@ -124,6 +133,7 @@ public:
 	void Release(void);
 	unsigned int GetLastAlivedTime(void);
 	unsigned int Get(char *buf, unsigned int len);
+	unsigned int Get(char *buf, unsigned int len,long int tout_s, long int tout_nsec);
 	unsigned int Put(const char *buf, unsigned int len);
 };
 

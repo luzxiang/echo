@@ -456,6 +456,21 @@ unsigned int Socket::Get(char *buf, unsigned int len)
 	return this->rFifo->Buf->Get(buf,len);
 }
 /*******************************************************************************
+ * Function     : Socket::Get
+ * Description  : TODO
+ * Input        :
+ * Return       :
+ * Author       : luzx
+ * Notes        : --
+ *******************************************************************************/
+unsigned int Socket::Get(char *buf, unsigned int len,long int tout_s, long int tout_nsec)
+{
+	this->rFifo->lock();
+	this->rFifo->timewait(tout_s, tout_nsec);
+	this->rFifo->unlock();
+	return this->rFifo->Empty() ? (0):(this->rFifo->Buf->Get(buf,len));
+}
+/*******************************************************************************
  * Function     : Socket::Put
  * Description  : TODO
  * Input        :
