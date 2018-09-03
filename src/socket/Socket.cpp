@@ -113,55 +113,6 @@ Socket::~Socket(void)
 {
 	Release();
 }
-/*******************************************************************************
- * Function     : Socket::wLength
- * Description  : TODO
- * Input        :
- * Return       :
- * Author       : luzx
- * Notes        : --
- *******************************************************************************/
-unsigned int Socket::wFreeLen(void)
-{
-	return (W_FIFO_BUF_LEN_ - this->wFifo->Len());
-}
-
-/*******************************************************************************
- * Function     : Socket::rLength
- * Description  : TODO
- * Input        :
- * Return       :
- * Author       : luzx
- * Notes        : --
- *******************************************************************************/
-unsigned int Socket::wBufLen(void)
-{
-	return this->wFifo->Len();
-}
-/*******************************************************************************
- * Function     : Socket::wLength
- * Description  : TODO
- * Input        :
- * Return       :
- * Author       : luzx
- * Notes        : --
- *******************************************************************************/
-unsigned int Socket::rFreeLen(void)
-{
-	return (R_FIFO_BUF_LEN_ - this->rFifo->Len());
-}
-/*******************************************************************************
- * Function     : Socket::rLength
- * Description  : TODO
- * Input        :
- * Return       :
- * Author       : luzx
- * Notes        : --
- *******************************************************************************/
-unsigned int Socket::rBufLen(void)
-{
-	return this->rFifo->Len();
-}
 
 /*******************************************************************************
  * Function     : Socket::Start
@@ -450,7 +401,7 @@ int Socket::Reading(void)
     FD_ZERO(&rfds);
     FD_SET(this->fd, &rfds);
 
-    int rfree = std::min(this->rFreeLen(), (unsigned int)(RWBUF_LEN_));
+    int rfree = std::min(this->rFifo->Free(), (unsigned int)(RWBUF_LEN_));
 
     if (select(this->fd + 1, &rfds, 0, 0, &tout) > 0)
     {
@@ -486,7 +437,7 @@ int Socket::Reading(void)
 int Socket::OnReceive(char *buf,unsigned int len)
 {
 	lastAlivedTime = time(0);
-	if(this->rFreeLen() >= len)
+	if(this->rFifo->HaveFree(len))
 	{
 		return this->rFifo->Put(buf,len);
 	}
@@ -514,12 +465,10 @@ unsigned int Socket::Get(char *buf, unsigned int len)
  *******************************************************************************/
 unsigned int Socket::Put(const char *buf, unsigned int len)
 {
-	int plen = 0;
-	if(this->wFreeLen() >= len)
-	{
-		plen = this->wFifo->Put(buf,len);
-	}
-	return plen;
+	if(this->wFifo->HaveFree(len))
+		return this->wFifo->Put(buf,len);
+	else
+		return 0;
 }
 
 

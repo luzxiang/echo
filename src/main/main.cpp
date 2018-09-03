@@ -53,12 +53,10 @@ void socket_client(char *ip,int port)
 	{
 		while(skt->Put(buf,len) == 0)
 		{
-			usleep(1000);
+			usleep(10*1000);
 		}
 		sumLen += len;
 	}
-	LOG_WATCH(skt->wFreeLen());
-	LOG_WATCH(skt->wBufLen());
 	LOG_WATCH(time(0)-start);
 	LOG_WATCH(sumLen);
 //	for(int i = 0; i <= 100000; i++)

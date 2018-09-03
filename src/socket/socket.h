@@ -12,8 +12,8 @@
 #include "../fifo/fifo.h"
 
 #define IP_LEN_ 			(48)
-#define R_FIFO_BUF_LEN_			(32*1024*1024)//
-#define W_FIFO_BUF_LEN_			(32*1024*1024)//
+#define R_FIFO_BUF_LEN_		(32*1024*1024)//
+#define W_FIFO_BUF_LEN_		(32*1024*1024)//
 
 #define RWBUF_LEN_    	    (4*1024*1024)
 
@@ -28,10 +28,6 @@ typedef struct sockt_fifo{
     	pthread_cond_signal(&this->cv);
     	return len;
     }
-
-//
-//
-//
     void lock(void)
     {
     	pthread_mutex_lock(&this->mtx);
@@ -50,15 +46,23 @@ typedef struct sockt_fifo{
     	pthread_mutex_unlock(&this->mtx);
     }
     //从缓冲给读取数据
-    unsigned int Get(char *buf, unsigned int len)
+    unsigned int Get(char *buf, unsigned int len) const
     {
     	return Buf->Get(buf, len);
     }
+    unsigned int Free(void) const
+    {
+    	return Buf->size - Buf->Len();
+    }
+    bool HaveFree(unsigned int size) const
+    {
+    	return (Buf->size - Buf->Len() >= size);
+    }
     //返回缓冲区中数据长度
-    unsigned int Len(){
+    unsigned int Len() const{
     	return Buf->Len();
     }
-    bool Empty()
+    bool Empty() const
     {
     	return Buf->Empty();
     }
@@ -77,7 +81,7 @@ typedef struct sockt_fifo{
 	~sockt_fifo()
 	{
 		if(Buf){
-			free(Buf);
+			delete Buf;
 		}
 	}
 }sockt_fifo_st;
@@ -85,10 +89,10 @@ typedef struct sockt_fifo{
 class Socket{
 private:
     int fd;
-    sockt_fifo_st* wFifo;
-    sockt_fifo_st* rFifo;
 	char *wbuf;
 	char *rbuf;
+    sockt_fifo_st* wFifo;
+    sockt_fifo_st* rFifo;
 	std::thread rPthread;  //接收数据线程
 	std::thread wPthread;  //发送数据线程
     bool wThdIsStart;
@@ -118,10 +122,6 @@ public:
 	~Socket(void);
 	void Start(void);
 	void Release(void);
-    unsigned int rBufLen(void);
-    unsigned int rFreeLen(void);
-    unsigned int wBufLen(void);
-    unsigned int wFreeLen(void);
 	unsigned int GetLastAlivedTime(void);
 	unsigned int Get(char *buf, unsigned int len);
 	unsigned int Put(const char *buf, unsigned int len);
