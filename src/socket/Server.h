@@ -7,6 +7,7 @@
 
 #ifndef SERVER_ISOCKET_H_
 #define SERVER_ISOCKET_H_
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
@@ -19,6 +20,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <unistd.h>
+#include <set>
 
 #include <algorithm>
 #include "../FIFO/FIFO.h"
@@ -40,8 +42,28 @@ using namespace std::placeholders;
 #define R_FIFO_BUF_LEN_			(16*1024*1024U)//这里必须是2的幂次方，因为用到了重构的fifo
 #define W_FIFO_BUF_LEN_			(16*1024*1024U)//这里必须是2的幂次方，因为用到了重构的fifo
 
+struct Client_St{
+	struct epoll_event ev;
+	string ip;
+	int port;
+    bool IsCneted; //<连接状态
+    unsigned long lastTime;
+    bool operator < (const Client_St& f) const
+    {
+    	return this->ev.data.fd < f.ev.data.fd;
+    }
+    Client_St(struct epoll_event  &_ev, const char *_ip, int _port)
+    {
+    	memcpy(&ev, &_ev, sizeof(_ev));
+    	ip = _ip;
+    	port = _port;
+    	IsCneted = true;
+    	lastTime = time(0);
+    }
+};
 class Server{
 protected:
+	std::set<Client_St*> Clients;
     int listenfd;
     int epfd;
     int Ev_Num;
@@ -74,6 +96,7 @@ public:
 	void Stop(void);
 	bool Start(void);
     int Create(void);
+    void Close(struct epoll_event ev);
     void Waite(void);
 	bool IsAlived(void);
 	void setnonblocking(int sock);

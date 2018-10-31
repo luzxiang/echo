@@ -33,10 +33,11 @@ void socket_client(char *ip,int port)
 	while(std::cin.getline(buf,BUF_LEN))
 	{
 		skt->wPut(buf, strlen(buf) + 1, 1);
+		std::cout<<">>";
 	}
-	getchar();
 	skt->Release();
 	delete [] buf;
+	getchar();
 }
 void socket_test(char mode = 's')
 {
@@ -48,7 +49,6 @@ void socket_test(char mode = 's')
     	Server *server = new Server(ip, port, 1024);
     	server->Start();
     	getchar();
-    	LOG_INFO("server->End()");
     }
     else if(mode == 'c')
     {

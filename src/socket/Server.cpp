@@ -22,6 +22,8 @@ void Server::SetSockOpt(void)
 	int reuse0=1;
 	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&reuse0 , sizeof(reuse0));
 
+	setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, (const void *)&reuse0 , sizeof(reuse0));
+
     int rLen = 8*1024 * 1024;
     setsockopt(listenfd, SOL_SOCKET, SO_RCVBUF, (const char*) &rLen, sizeof(rLen));
     //发送缓冲区
@@ -168,6 +170,7 @@ void Server::Release(void)
 		delete[] rbuffer;//free(rbuf);
 		rbuffer = nullptr;
 	}
+#include <sys/epoll.h>
     this->listenfd = -1;
 }
 
@@ -253,6 +256,7 @@ int Server::Create(void)
 	epfd = epoll_create(Ev_Num);
 	struct sockaddr_in serveraddr;
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	SetSockOpt();
 	//把socket设置为非阻塞方式
 //	setnonblocking(listenfd);
 	//设置与要处理的事件相关的文件描述符
@@ -272,6 +276,21 @@ int Server::Create(void)
 	epoll_ctl(epfd,EPOLL_CTL_ADD,listenfd,&ev);
 	return 0;
 }
+void Server::Close(struct epoll_event ev)
+{
+	auto iev = std::find_if(Clients.begin(),Clients.end(),[&](const Client_St* c){
+		return c->ev.data.fd == ev.data.fd;
+	});
+
+	LOG_WATCH(Clients.size());
+	LOG_WARN("client[%s:%d] is closed", (*iev)->ip.c_str(), (*iev)->port);
+	Clients.erase(iev);
+	close(ev.data.fd);
+	LOG_WATCH(Clients.size());
+	//修改sockfd上要处理的事件为EPOLLOUT
+	epoll_ctl(epfd,EPOLL_CTL_DEL,ev.data.fd,&ev);
+	ev.data.fd = -1;
+}
 
 void Server::Waite(void)
 {
@@ -280,8 +299,8 @@ void Server::Waite(void)
 	const int MAXLINE = 1024;
 	char line[MAXLINE];
 	int tout = 1000 * 10;//ms
-	socklen_t clilen;
 	struct sockaddr_in clientaddr;
+    socklen_t clilen = sizeof(struct sockaddr);
 	int connfd, sockfd, evs = 0;
 	SktThdIsStart = true;
 	while (SktThdIsStart)
@@ -290,65 +309,53 @@ void Server::Waite(void)
 		LOG_DEBUG("%d",evs);
 		for(int i = 0; i < evs; i++)//处理所发生的所有事件
 		{
-			LOG_INFO("events[i].data.fd,%d",events[i].data.fd);
 			if (events[i].data.fd == listenfd)	//如果新监测到一个SOCKET用户连接到了绑定的SOCKET端口，建立新的连接。
 			{
-				connfd = accept(listenfd, (sockaddr *) &clientaddr, &clilen);
+				memset(&clientaddr, 0, sizeof(clientaddr));
+				connfd = accept4(listenfd, (sockaddr *) &clientaddr, &clilen, SOCK_CLOEXEC);
 				if (connfd < 0)
 				{
 					perror("connfd<0");
 					exit(1);
 				}
 				//setnonblocking(connfd);
-				LOG_INFO("accapt a connection from %s" ,inet_ntoa(clientaddr.sin_addr));
-				//设置用于读操作的文件描述符
-				ev.data.fd = connfd;
-				//设置用于注测的读操作事件
-				ev.events = EPOLLIN | EPOLLET;
-				//ev.events=EPOLLIN;
+				ev.data.fd = connfd;//设置用于读操作的文件描述符
+				ev.events = EPOLLIN | EPOLLET;//设置用于注测的读操作事件
 				//注册ev
 				epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &ev);
+				this->Clients.insert(new Client_St(ev, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port));
+				LOG_INFO("accapt a connection from %s:%d"
+						,inet_ntoa(clientaddr.sin_addr)
+						,clientaddr.sin_port);
 			}
 			else if (events[i].events & EPOLLIN)	//如果是已经连接的用户，并且收到数据，那么进行读入。
 			{
-				LOG_INFO("EPOLLIN");
 				if ((sockfd = events[i].data.fd) < 0)
 					continue;
-				if ((n = Read(sockfd, line, MAXLINE, 0)) < 0)
+				n = Read(sockfd, line, MAXLINE, 0);
+				if (n == 0 || (errno == ECONNRESET))
 				{
-					if (errno == ECONNRESET)
-					{
-						close(sockfd);
-						events[i].data.fd = -1;
-					}
-					else
-						std::cout << "readline error" << std::endl;
-				}
-				else if (n == 0)
+					Close(events[i]);
+					continue;
+				}else if(n < 0)
 				{
-					close(sockfd);
-					events[i].data.fd = -1;
+					std::cout << "read line error" << std::endl;
+					continue;
 				}
 				line[n] = '\0';
-				LOG_WATCH(line);
-				//设置用于写操作的文件描述符
-				ev.data.fd = sockfd;
-				//设置用于注测的写操作事件
-				ev.events = EPOLLOUT | EPOLLET;
-				//修改sockfd上要处理的事件为EPOLLOUT
-				epoll_ctl(epfd,EPOLL_CTL_MOD,sockfd,&ev);
+				LOG_INFO("client: %s",line);
+				ev.data.fd = sockfd;//设置用于写操作的文件描述符
+				ev.events = EPOLLOUT | EPOLLET;//设置用于注测的写操作事件
+				epoll_ctl(epfd,EPOLL_CTL_MOD,sockfd,&ev);//修改sockfd上要处理的事件为EPOLLOUT
 			}
 			else if (events[i].events & EPOLLOUT) // 如果有数据发送
 			{
-				LOG_INFO("EPOLLOUT");
 				sockfd = events[i].data.fd;
 				Send(sockfd, line, n, 0);
-				//设置用于读操作的文件描述符
-				ev.data.fd = sockfd;
-				//设置用于注测的读操作事件
-				ev.events = EPOLLIN | EPOLLET;
-				//修改sockfd上要处理的事件为EPOLIN
-				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
+
+				ev.data.fd = sockfd;//设置用于读操作的文件描述符
+				ev.events = EPOLLIN | EPOLLET;//设置用于注测的读操作事件
+				epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);//修改sockfd上要处理的事件为EPOLIN
 			}
 		}
 	}
