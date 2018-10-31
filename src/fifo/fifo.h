@@ -1,76 +1,77 @@
-/********************************************************
- * filename: fifo.h
- * date: 2017-7-27
- * desc: 环形缓冲区
- *       该类是参考kfifo进行了简单c++封装, 要求size必须为2的幂,
- *       Get及Put函数没有共同修改的变量, 因此支持单个生产者、单个
- *       消费者无锁使用
- ********************************************************/
-#ifndef FIFO_H
-#define FIFO_H
-#include <iostream>
+﻿/*
+ * FIFO_.h
+ *
+ *  Created on: 2018年9月12日
+ *      Author: luzxiang
+ */
 
-struct FIFO
-{
-public:
-    FIFO(unsigned int sz = 1024);
-    FIFO(char *buf, unsigned int sz);
-    ~FIFO();
-    //数据写入缓冲区
-    unsigned int Put(const char *buf, unsigned int len);
-    //从缓冲给读取数据
-    unsigned int Get(char *buf, unsigned int len);
-    //返回缓冲区中数据长度
-    unsigned int Len()
-    {
-        return in - out;
-    }
-    bool Empty()
-    {
-    	return (in == out);
-    }
-    
-    void Reset()
-    {
-        in = out = 0;
-    }
-    //获取数据开始位置
-    char* Outset()
-    {
-        return buffer + (out & (size - 1));
-    }
-    
-private:
-    void Init(unsigned int sz)
-    {
-        in = 0;
-        out = 0;
-        size = sz;
-    }
-
-public:
-    //数据缓冲区
-    char *buffer;
-    //数据缓冲区长度
-    unsigned int size;
-    //写位置
-    unsigned int in;
-    //读位置
-    unsigned int out;
-private:
-    //标识是否拥有buffer
-    bool need_free_buffer_;
-};
-inline std::ostream &
-operator << (std::ostream &os, const FIFO &fifo)
-{
-    os << "FIFO" << std::endl;
-    os << "[" << std::endl;
-    os << "size = " << fifo.size << std::endl;
-    os << "in = " << fifo.in << std::endl;
-    os << "out = " << fifo.out << std::endl;
-    os << "len = " << fifo.in-fifo.out << std::endl;
-    os << "]";
-    return os;
-}
+#ifndef FIFO_FIFO_H_
+#define FIFO_FIFO_H_
+#include <mutex>
+#ifdef OS_LINUX
+#include <sys/time.h>
 #endif
+#include <thread>
+#include <chrono>
+#include <mutex>                // std::mutex, std::unique_lock
+#include <condition_variable>    // std::condition_variable
+#include <string.h>
+#include "FIFO_.h"
+using namespace std;
+
+typedef std::unique_lock <std::mutex> mtxlock;
+typedef struct sockt_fifo{
+	FIFO_ *Buf;
+	std::mutex mtx; // 全局互斥锁.
+	std::condition_variable cv; // 全局条件变量.
+    //数据写入缓冲区
+    unsigned int Put(const char *buf, unsigned int len)
+    {/* notice: if you have just one thread to call Push function,
+    	 * necessary to enable the thread lock here, else you must enable*/
+    	mtxlock lck(mtx);
+    	len = Buf->Put(buf, len);
+    	this->cv.notify_all(); // 唤醒所有线程.
+    	return len;
+    }
+    void Release(void)
+    {
+    }
+    //从缓冲给读取数据
+    unsigned int Get(char *buf, unsigned int len)
+    {
+    	return Buf->Get(buf, len);
+    }
+    unsigned int HaveFree(void) const
+    {
+    	return Buf->size - Buf->Len();
+    }
+    bool HaveFree(unsigned int size) const
+    {
+    	return (Buf->size - Buf->Len() >= size);
+    }
+    //返回缓冲区中数据长度
+    unsigned int Len() const{
+    	return Buf->Len();
+    }
+    bool Empty() const
+    {
+    	return Buf->Empty();
+    }
+	sockt_fifo(unsigned int size = 1024)
+	{
+		Buf = new FIFO_(size);
+	}
+	sockt_fifo(char *buf, unsigned int size)
+	{
+		Buf = new FIFO_(buf, size);
+	}
+	virtual ~sockt_fifo()
+	{
+//		pthread_cond_destroy(&this->cv);
+//		pthread_mutex_destroy(&this->mtx);
+	}
+}sockt_fifo_st;
+
+
+
+#endif /* FIFO_FIFO__H_ */

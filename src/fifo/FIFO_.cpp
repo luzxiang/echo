@@ -1,15 +1,14 @@
-/********************************************************
+﻿/********************************************************
  * filename: fifo.cc
  * date: 2017-7-27
  * desc: 环形缓冲区实现
  ********************************************************/
 #include <string.h>
 #include <algorithm>
-#include "fifo.h"
-
+#include "FIFO_.h"
 using std::min;
 
-FIFO::FIFO(unsigned int sz)
+FIFO_::FIFO_(unsigned int sz)
 {
     Init(sz);
     buffer = new char[sz];
@@ -17,17 +16,17 @@ FIFO::FIFO(unsigned int sz)
 
 }
 
-FIFO::FIFO(char *buf, unsigned int sz)
+FIFO_::FIFO_(char *buf, unsigned int sz)
 {
     Init(sz);
     buffer = buf;
     need_free_buffer_ = false;
 }
 
-FIFO::~FIFO()
+FIFO_::~FIFO_()
 {
     //拥有的buffer才需要释放
-    if(need_free_buffer_)
+    if(need_free_buffer_ && buffer)
         delete[] buffer;
 }
 
@@ -41,7 +40,7 @@ FIFO::~FIFO()
  * Return: 实际写入的数据长度
  * Others:
  ********************************************************/
-unsigned int FIFO::Put(const char *buf, unsigned int len)
+unsigned int FIFO_::Put(const char *buf, unsigned int len)
 {
     unsigned int end_len = 0;
     
@@ -68,13 +67,11 @@ unsigned int FIFO::Put(const char *buf, unsigned int len)
  * Return: 实际读取的数据长度
  * Others:
  ********************************************************/
-unsigned int FIFO::Get(char *buf, unsigned int len)
+unsigned int FIFO_::Get(char *buf, unsigned int len)
 {
     unsigned int end_len = 0;
-    
     //可读数据
     len = min(len, in - out);
-    
     //先从尾部读取数据
     end_len = min(len, size - (out & (size - 1)));
     memcpy(buf, buffer + (out & (size - 1)), end_len);
