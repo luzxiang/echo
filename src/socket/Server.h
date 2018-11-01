@@ -70,6 +70,7 @@ protected:
 	char *wbuffer;//从FIFO取出数据到这里，然后从这里发到Socket
 	char *rbuffer;//从Socket取出数据到这里，然后从这里给到FIFO
 	int pfds[2];//guandao fd
+    sockt_fifo_st* wFifo;
 
 	std::thread SktThread;  	//发送数据线程
     bool SktThdIsStart;
@@ -90,6 +91,13 @@ protected:
     void SetSockOpt(void);
 	int OnReceive(char *buf, unsigned int len);
 
+	unsigned int wGet(char *buf, unsigned int len);
+	unsigned int wGet(char *buf, unsigned int len, unsigned int tout_s);
+	unsigned int wGet(char *buf, unsigned int len, unsigned int tout_s, unsigned int tout_msec);
+
+private:
+	unsigned int Get(sockt_fifo_st *fifo,char *buf, unsigned int len, unsigned int tout_s, long int tout_msec);
+	virtual unsigned int Put(sockt_fifo_st *fifo,const char *buf, unsigned int len, unsigned int tout_s, long int tout_ms);
 public:
 	Server(char*ip, int port, int num);
 	virtual ~Server(void);
@@ -101,6 +109,10 @@ public:
 	bool IsAlived(void);
 	void setnonblocking(int sock);
 	unsigned int GetLastAlivedTime(void);
+	unsigned int GetWBufLen();
+	unsigned int wPut(const char *buf, unsigned int len);
+	unsigned int wPut(const char *buf, unsigned int len, unsigned int tout_s);
+	unsigned int wPut(const char *buf, unsigned int len, unsigned int tout_s, unsigned int tout_msec);
 
 };
 

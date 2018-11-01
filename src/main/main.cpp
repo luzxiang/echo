@@ -23,6 +23,7 @@ using std::chrono::seconds;
 #include "../Socket/ISocket.h"
 #include "../Socket/Server.h"
 using namespace std;
+#include <assert.h>
 const int BUF_LEN = 1024 * 2;
 
 void socket_client(char *ip,int port)
